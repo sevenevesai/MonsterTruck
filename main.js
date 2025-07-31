@@ -8,9 +8,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function resize() {
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
+    groundY = canvas.height - groundHeight / 2;
+    Body.setPosition(ground, { x: levelWidth / 2, y: groundY });
   }
   window.addEventListener('resize', resize);
-  resize();
 
   // Physics engine
   const engine = Engine.create();
@@ -25,9 +26,15 @@ document.addEventListener('DOMContentLoaded', function() {
   const ground = Bodies.rectangle(
     levelWidth/2, groundY,
     levelWidth, groundHeight,
-    { isStatic: true, friction: 0.8, restitution: 0 }
+    {
+      isStatic: true,
+      friction: 1,
+      frictionStatic: 1,
+      restitution: 0
+    }
   );
   World.add(world, ground);
+  resize();
 
   // Truck setup
   const truckWidth  = 200;
@@ -36,36 +43,59 @@ document.addEventListener('DOMContentLoaded', function() {
   const startX      = 200;
   const startY      = groundY - truckHeight - wheelRadius;
 
+  const group = Body.nextGroup(true);
+
   const chassis = Bodies.rectangle(
     startX, startY,
     truckWidth, truckHeight,
-    { friction: 0.2, restitution: 0, frictionAir: 0.05 }
+    {
+      collisionFilter: { group },
+      friction: 0.6,
+      frictionStatic: 1,
+      restitution: 0,
+      frictionAir: 0.05,
+      density: 0.002
+    }
   );
   const leftWheel = Bodies.circle(
     startX - truckWidth * 0.35,
     startY + truckHeight / 2 + wheelRadius,
     wheelRadius,
-    { friction: 1 }
+    {
+      collisionFilter: { group },
+      friction: 1,
+      frictionStatic: 1.5,
+      restitution: 0,
+      density: 0.001
+    }
   );
   const rightWheel = Bodies.circle(
     startX + truckWidth * 0.35,
     startY + truckHeight / 2 + wheelRadius,
     wheelRadius,
-    { friction: 1 }
+    {
+      collisionFilter: { group },
+      friction: 1,
+      frictionStatic: 1.5,
+      restitution: 0,
+      density: 0.001
+    }
   );
 
   const axleLeft = Constraint.create({
     bodyA: chassis,
     pointA: { x: -truckWidth * 0.35, y: truckHeight / 2 },
     bodyB: leftWheel,
-    stiffness: 1,
+    stiffness: 0.7,
+    damping: 0.2,
     length: 0
   });
   const axleRight = Constraint.create({
     bodyA: chassis,
     pointA: { x: truckWidth * 0.35, y: truckHeight / 2 },
     bodyB: rightWheel,
-    stiffness: 1,
+    stiffness: 0.7,
+    damping: 0.2,
     length: 0
   });
 
@@ -137,7 +167,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (keys.right) Body.applyForce(chassis, chassis.position, { x: force, y:0 });
 
     // Jump
-    const onGround = Math.abs(chassis.position.y - (groundY - truckHeight/2)) < 5;
+    const onGround =
+      leftWheel.position.y + wheelRadius >= groundY - 1 ||
+      rightWheel.position.y + wheelRadius >= groundY - 1;
     if (keys.jump && onGround) {
       Body.setVelocity(chassis, { x: chassis.velocity.x, y: -10 });
     }
