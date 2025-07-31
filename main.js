@@ -1,6 +1,6 @@
 // main.js
 document.addEventListener('DOMContentLoaded', function() {
-  const { Engine, World, Bodies, Body, Events } = Matter;
+  const { Engine, World, Bodies, Body, Events, Constraint, Composite } = Matter;
 
   // Canvas setup
   const canvas = document.getElementById('gameCanvas');
@@ -31,15 +31,46 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Truck setup
   const truckWidth  = 200;
-  const truckHeight = 100;
+  const truckHeight = 80;
+  const wheelRadius = 35;
   const startX      = 200;
-  const startY      = groundY - truckHeight;
+  const startY      = groundY - truckHeight - wheelRadius;
 
-  const truck = Bodies.rectangle(
+  const chassis = Bodies.rectangle(
     startX, startY,
     truckWidth, truckHeight,
     { friction: 0.2, restitution: 0, frictionAir: 0.05 }
   );
+  const leftWheel = Bodies.circle(
+    startX - truckWidth * 0.35,
+    startY + truckHeight / 2 + wheelRadius,
+    wheelRadius,
+    { friction: 1 }
+  );
+  const rightWheel = Bodies.circle(
+    startX + truckWidth * 0.35,
+    startY + truckHeight / 2 + wheelRadius,
+    wheelRadius,
+    { friction: 1 }
+  );
+
+  const axleLeft = Constraint.create({
+    bodyA: chassis,
+    pointA: { x: -truckWidth * 0.35, y: truckHeight / 2 },
+    bodyB: leftWheel,
+    stiffness: 1,
+    length: 0
+  });
+  const axleRight = Constraint.create({
+    bodyA: chassis,
+    pointA: { x: truckWidth * 0.35, y: truckHeight / 2 },
+    bodyB: rightWheel,
+    stiffness: 1,
+    length: 0
+  });
+
+  const truck = Composite.create();
+  Composite.add(truck, [chassis, leftWheel, rightWheel, axleLeft, axleRight]);
   World.add(world, truck);
 
   // Obstacles
@@ -61,12 +92,12 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   // spawn ahead
   setInterval(() => {
-    createObstacle(truck.position.x + canvas.width + 200);
+    createObstacle(chassis.position.x + canvas.width + 200);
   }, 2000);
   // cleanup behind
   Events.on(engine, 'afterUpdate', () => {
     for (let i=obstacles.length-1; i>=0; i--) {
-      if (obstacles[i].position.x < truck.position.x - canvas.width) {
+      if (obstacles[i].position.x < chassis.position.x - canvas.width) {
         World.remove(world, obstacles[i]);
         obstacles.splice(i, 1);
       }
@@ -102,13 +133,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Controls: apply force
     const force = 0.0005;
-    if (keys.left)  Body.applyForce(truck, truck.position, { x:-force, y:0 });
-    if (keys.right) Body.applyForce(truck, truck.position, { x: force, y:0 });
+    if (keys.left)  Body.applyForce(chassis, chassis.position, { x:-force, y:0 });
+    if (keys.right) Body.applyForce(chassis, chassis.position, { x: force, y:0 });
 
     // Jump
-    const onGround = Math.abs(truck.position.y - (groundY - truckHeight/2)) < 5;
+    const onGround = Math.abs(chassis.position.y - (groundY - truckHeight/2)) < 5;
     if (keys.jump && onGround) {
-      Body.setVelocity(truck, { x: truck.velocity.x, y: -10 });
+      Body.setVelocity(chassis, { x: chassis.velocity.x, y: -10 });
     }
 
     Engine.update(engine, delta);
@@ -116,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Draw
     // recalc groundY in case of resize
     groundY = canvas.height - groundHeight/2;
-    const offsetX = Math.max(truck.position.x - canvas.width/3, 0);
+    const offsetX = Math.max(chassis.position.x - canvas.width/3, 0);
 
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -142,13 +173,21 @@ document.addEventListener('DOMContentLoaded', function() {
       ctx.restore();
     });
 
-    // Truck (simple black rect for now)
+    // Truck chassis
     ctx.save();
-    ctx.translate(truck.position.x, truck.position.y);
-    ctx.rotate(truck.angle);
+    ctx.translate(chassis.position.x, chassis.position.y);
+    ctx.rotate(chassis.angle);
     ctx.fillStyle = '#000';
     ctx.fillRect(-truckWidth/2, -truckHeight/2, truckWidth, truckHeight);
     ctx.restore();
+
+    // Wheels
+    ctx.fillStyle = '#333';
+    [leftWheel, rightWheel].forEach(w => {
+      ctx.beginPath();
+      ctx.arc(w.position.x, w.position.y, wheelRadius, 0, Math.PI * 2);
+      ctx.fill();
+    });
 
     requestAnimationFrame(gameLoop);
   }
